@@ -3,9 +3,10 @@ import { CONSTANTS } from './utils.js';
 import { Bullet } from './bullet.js';
 
 export class Enemy {
-    constructor(scene, type, position) {
+    constructor(scene, type, position, isStatic = false) {
         this.scene = scene;
         this.typeStr = type;
+        this.isStatic = isStatic; // Flag para enemigos estáticos en plataformas
         this.config = CONSTANTS.ENEMY[type];
         this.hp = this.config.HP;
         this.maxHp = this.config.HP;
@@ -144,7 +145,7 @@ export class Enemy {
         const isBoss = this.typeStr === 'BOSS';
         const isLarge = this.typeStr === 'MEDIUM' || this.typeStr === 'LARGE';
 
-        if (!isFinalBoss) {
+        if (!isFinalBoss && !this.isStatic) {
             this.velocity.y += CONSTANTS.LEVEL.GRAVITY * delta;
             this.mesh.position.y += this.velocity.y * delta;
             
@@ -199,14 +200,16 @@ export class Enemy {
         }
 
         if (this.state === 'PATROL') {
-            // Movimiento izquierda/derecha automático suave
-            this.mesh.position.x += this.patrolDir * this.config.SPEED * 0.5 * delta;
-            
-            // Cambiar dirección si se sale del rango de patrulla
-            if (Math.abs(this.mesh.position.x - this.startX) > this.patrolRange) {
-                this.patrolDir *= -1;
-                // Ajustar posición para evitar oscilación
-                this.mesh.position.x = this.startX + this.patrolDir * this.patrolRange * 0.99;
+            if (!this.isStatic) {
+                // Movimiento izquierda/derecha automático suave
+                this.mesh.position.x += this.patrolDir * this.config.SPEED * 0.5 * delta;
+                
+                // Cambiar dirección si se sale del rango de patrulla
+                if (Math.abs(this.mesh.position.x - this.startX) > this.patrolRange) {
+                    this.patrolDir *= -1;
+                    // Ajustar posición para evitar oscilación
+                    this.mesh.position.x = this.startX + this.patrolDir * this.patrolRange * 0.99;
+                }
             }
             
             this.mesh.rotation.y = this.patrolDir > 0 ? Math.PI / 2 : -Math.PI / 2;
@@ -215,11 +218,13 @@ export class Enemy {
             this.mesh.rotation.y = sign > 0 ? Math.PI / 2 : -Math.PI / 2;
             
             // Todos los enemigos persiguen al jugador
-            if (isLarge || isBoss || isSmall) {
-                const aggressiveness = isBoss ? 1.5 : 1.0;
-                // Mantener cierta distancia para disparar sin superponerse
-                if (Math.abs(dirX) > 5) {
-                    this.mesh.position.x += sign * this.config.SPEED * aggressiveness * delta;
+            if (!this.isStatic) {
+                if (isLarge || isBoss || isSmall) {
+                    const aggressiveness = isBoss ? 1.5 : 1.0;
+                    // Mantener cierta distancia para disparar sin superponerse
+                    if (Math.abs(dirX) > 5) {
+                        this.mesh.position.x += sign * this.config.SPEED * aggressiveness * delta;
+                    }
                 }
             }
             
@@ -230,6 +235,15 @@ export class Enemy {
                 if (this.shootTimer >= this.shootInterval * 0.5) {
                     this.shootTimer = 0;
                     this.shoot(playerPosition, gameObj);
+                }
+            } else if (this.isStatic) {
+                // Enemigos estáticos atacan desde arriba cuando el jugador está a la vista
+                if (Math.abs(dirX) < 15) {
+                    this.shootTimer += delta * 1000;
+                    if (this.shootTimer >= this.shootInterval) {
+                        this.shootTimer = 0;
+                        this.shoot(playerPosition, gameObj);
+                    }
                 }
             } else {
                 const maxShots = Math.min(5, gameObj.level.currentLevel); // +1 disparo por nivel (máx 5)
