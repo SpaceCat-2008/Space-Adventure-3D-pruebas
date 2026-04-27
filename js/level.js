@@ -14,24 +14,40 @@ export class Level {
         this.shipPart = null;
         this.bossActive = false;
 
-        // Crear textura de ruido generada para la luna
+        // Crear textura generada para la luna (cráteres/estilo lunar)
         const canvas = document.createElement('canvas');
-        canvas.width = 256;
-        canvas.height = 256;
+        canvas.width = 512;
+        canvas.height = 512;
         const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#666';
-        ctx.fillRect(0, 0, 256, 256);
-        for(let i=0; i<10000; i++) {
-            ctx.fillStyle = Math.random() > 0.5 ? '#777' : '#555';
-            ctx.fillRect(Math.random()*256, Math.random()*256, Math.random()*4, Math.random()*4);
+        ctx.fillStyle = '#555'; // Base lunar
+        ctx.fillRect(0, 0, 512, 512);
+        
+        // Generar cráteres simples
+        for(let i=0; i<40; i++) {
+            const cx = Math.random() * 512;
+            const cy = Math.random() * 512;
+            const radius = Math.random() * 30 + 10;
+            
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#333';
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(cx - 2, cy - 2, radius, 0, Math.PI * 2);
+            ctx.strokeStyle = '#777';
+            ctx.lineWidth = 3;
+            ctx.stroke();
         }
+        
         const moonTex = new THREE.CanvasTexture(canvas);
         moonTex.wrapS = THREE.RepeatWrapping;
         moonTex.wrapT = THREE.RepeatWrapping;
         moonTex.repeat.set(10, 2);
 
         this.floorMat = new THREE.MeshStandardMaterial({ 
-            color: 0x888888, 
+            color: 0xaaaaaa, 
+            map: moonTex,
             roughness: 1.0, 
             bumpMap: moonTex, 
             bumpScale: 0.2 
@@ -67,7 +83,7 @@ export class Level {
         this.floor.receiveShadow = true;
         this.scene.add(this.floor);
 
-        // Plataformas móviles
+        // Plataformas fijas
         let lastPlatformEndX = 10;
         for (let i = 0; i < numPlatforms; i++) {
             const width = MathUtils.randFloat(3, 8);
@@ -75,24 +91,32 @@ export class Level {
             const spawnX = lastPlatformEndX + space + (width / 2);
             lastPlatformEndX = spawnX + (width / 2);
 
+            const platY = MathUtils.randFloat(2, 10);
             const platGeo = new THREE.BoxGeometry(width, 1, 3);
             const plat = new THREE.Mesh(platGeo, this.platformMat);
-            plat.position.set(
-                spawnX,
-                MathUtils.randFloat(2, 10),
-                0
-            );
+            plat.position.set(spawnX, platY, 0);
             plat.receiveShadow = true;
             plat.castShadow = true;
             
             this.platforms.push({
                 mesh: plat,
-                minY: plat.position.y - 2,
-                maxY: plat.position.y + 4,
-                speed: MathUtils.randFloat(1, 3),
-                dir: 1
+                minY: platY - 2,
+                maxY: platY + 4,
+                speed: 0, // Plataformas detenidas completamente
+                dir: 0
             });
             this.scene.add(plat);
+
+            // Generar enemigo estático en algunas plataformas
+            if (Math.random() > 0.4) {
+                this.enemiesToSpawn.push({ 
+                    x: spawnX, 
+                    y: platY + 1.5, 
+                    type: 'SMALL', 
+                    spawned: false, 
+                    isStatic: true 
+                });
+            }
         }
 
         // Programar spawn de enemigos a lo largo del nivel
@@ -123,7 +147,9 @@ export class Level {
         this.enemiesToSpawn.forEach(e => {
             if (!e.spawned && playerPos.x > e.x - 40) { // Spawnear cuando esté a 40 unidades
                 e.spawned = true;
-                const enemy = new Enemy(this.scene, e.type, new THREE.Vector3(e.x, 2, 0));
+                const spawnY = e.y !== undefined ? e.y : 2;
+                const isStatic = e.isStatic || false;
+                const enemy = new Enemy(this.scene, e.type, new THREE.Vector3(e.x, spawnY, 0), isStatic);
                 this.game.enemies.push(enemy);
             }
         });
